@@ -60,6 +60,22 @@ export const apiSlice = createApi({
         method: 'GET',
       }),
     }),
+    getUserDetails: builder.query<UserType, string>({
+      query: (id) => ({
+        url: `/users/getUserDetails/${id}`,
+        method: 'GET',
+      }),
+    }),
+
+    updateUserDetails: builder.mutation<UserType, { id: string; data: any }>({
+      query: ({ id, data }) => ({
+        url: `/users/updateUserDetails/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      
+    }),
+
   }),
 });
 
@@ -67,4 +83,6 @@ export const {
   useLoginMutation,
   useCreateUserMutation,
   useGetAllUsersQuery,
+  useGetUserDetailsQuery,
+  useUpdateUserDetailsMutation,
 } = apiSlice;

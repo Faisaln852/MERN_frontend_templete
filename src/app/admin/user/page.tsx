@@ -135,8 +135,8 @@ export const columns: ColumnDef<UserType>[] = [
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem>View Details</DropdownMenuItem>
-            <DropdownMenuItem>Edit User</DropdownMenuItem>
+            <DropdownMenuItem> <Link href={`user/details/${user._id}`}>View Details</Link></DropdownMenuItem>
+            <DropdownMenuItem> <Link href={`user/edit/${user._id}`}>Edit User</Link></DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       );
@@ -146,7 +146,7 @@ export const columns: ColumnDef<UserType>[] = [
 
 export default function User() {
   useEffect(() => {
-    document.title = "User";
+    document.title = "Users list";
   }, []);
 
   const { data, isLoading } = useGetAllUsersQuery();
@@ -189,7 +189,7 @@ export default function User() {
     <div className="w-full">
       <div className="flex justify-end mb-4">
         <Button asChild>
-          <Link href="/user/create">Create User</Link>
+          <Link href="user/create">Create User</Link>
         </Button>
       </div>
 
