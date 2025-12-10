@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import * as z from "zod"
-
+import { useCreateUserMutation } from "../../../../store/slices/apiSlice"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -29,43 +29,66 @@ import {
   InputGroupText,
   InputGroupTextarea,
 } from "@/components/ui/input-group"
+import { description } from "../../layout/chart-area-interactive"
 
+// const formSchema = z.object({
+//   title: z
+//     .string()
+//     .min(5, "Bug title must be at least 5 characters.")
+//     .max(32, "Bug title must be at most 32 characters."),
+//   description: z
+//     .string()
+//     .min(20, "Description must be at least 20 characters.")
+//     .max(100, "Description must be at most 100 characters."),
+//       email: z
+//     .string()
+//     .email("Invalid email address"),
+// })
 const formSchema = z.object({
-  title: z
+  name: z
     .string()
-    .min(5, "Bug title must be at least 5 characters.")
-    .max(32, "Bug title must be at most 32 characters."),
+    .nullable(),
+    // .min(5, "Title must be at least 5 characters.")
+    // .max(32, "Title must be at most 32 characters."),
   description: z
     .string()
-    .min(20, "Description must be at least 20 characters.")
+    .min(5, "Description must be at least 5 characters.")
     .max(100, "Description must be at most 100 characters."),
+  email: z
+    .string()
+    .email("Invalid email address"),
+phone_number: z
+  .string()
+  .regex(/^(\+?\d{1,3}[-.\s]?)?(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})$/, "Invalid phone number"),
+  age: z.coerce
+  .number()
+  .int("Age must be an integer")
+  .min(18, "Age must be at least 18")
+  .max(100, "Age must be at most 100"),
 })
 
 export function createUser() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      title: "",
+      name: "",
       description: "",
+      email: "",
+      phone_number:"",
+      age:0,
     },
   })
-
-  function onSubmit(data: z.infer<typeof formSchema>) {
-    toast("You submitted the following values:", {
-      description: (
-        <pre className="bg-code text-code-foreground mt-2 w-[320px] overflow-x-auto rounded-md p-4">
-          <code>{JSON.stringify(data, null, 2)}</code>
-        </pre>
-      ),
-      position: "bottom-right",
-      classNames: {
-        content: "flex flex-col gap-2",
-      },
-      style: {
-        "--border-radius": "calc(var(--radius)  + 4px)",
-      } as React.CSSProperties,
-    })
+const [createUser, { isLoading, error }] = useCreateUserMutation();
+const onSubmit = async (data: z.infer<typeof formSchema>) => {
+  try {
+    const response = await createUser(data).unwrap();
+    toast.success('User created successfully'); // or any other notification library
+    console.log(response);
+  } catch (err: any) {
+    toast.error(err.data.message || 'Something went wrong'); // or any other notification library
+    console.error(err);
   }
+};
 
   return (
     <Card className="w-full sm:max-w-md mx-auto">
@@ -79,7 +102,7 @@ export function createUser() {
         <form id="form-rhf-demo" onSubmit={form.handleSubmit(onSubmit)}>
           <FieldGroup>
             <Controller
-              name="title"
+              name="name"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
@@ -152,6 +175,7 @@ export function createUser() {
                   <Input
                     {...field}
                     id="user-age"
+                    type="number"
                     aria-invalid={fieldState.invalid}
                     placeholder="18"
                     autoComplete="on"
