@@ -1,58 +1,38 @@
-// middleware.ts
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-
-const protectedRoutes = [
-  {
-    path: '/admin/dashboard',
-    roles: ['admin'],
-    permissions: [],
-  },
-  {
-    path: '/user/dashboard',
-    roles: ['user'],
-    permissions: ['create:post'],
-  },
-];
-
-function getUserFromRequest(req: NextRequest) {
-  // This example assumes you store auth info in cookies
-  const token = req.cookies.get('token')?.value;
-  if (!token) return null;
-
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload; // Assume payload includes { role, permissions }
-  } catch {
-    return null;
-  }
-}
+import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
 export function middleware(req: NextRequest) {
-  const user = getUserFromRequest(req);
+  const { pathname } = req.nextUrl
 
-  const pathname = req.nextUrl.pathname;
-
-  for (const route of protectedRoutes) {
-    if (pathname.startsWith(route.path)) {
-      if (!user) {
-        return NextResponse.redirect(new URL('/login', req.url));
-      }
-
-      const hasRole = route.roles.includes(user.role);
-      const hasPermissions = route.permissions.every((p: string) =>
-        user.permissions.includes(p)
-      );
-
-      if (!hasRole || !hasPermissions) {
-        return NextResponse.redirect(new URL('/unauthorized', req.url));
-      }
+  const token = req.cookies.get("token")?.value
+console.log("start----------------");
+console.log(token)
+console.log("end----------------");
+  // ❌ If NOT logged in, redirect to login for protected routes
+  if (!token) {
+    if (pathname.startsWith("/admin") || pathname.startsWith("/user")) {
+      return NextResponse.redirect(new URL("/login", req.url))
     }
+    return NextResponse.next()
   }
 
-  return NextResponse.next();
+  // Optional: role hint stored separately
+  const role = req.cookies.get("role")?.value
+// return role;
+  // Admin-only protection
+  if (pathname.startsWith("/admin") && role !== "admin") {
+    console.log(role)
+    return NextResponse.redirect(new URL("/login", req.url))
+  }
+
+  // User-only protection
+  if (pathname.startsWith("/user") && role !== "user") {
+    return NextResponse.redirect(new URL("/login", req.url))
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/user/:path*'], // routes to apply middleware on
-};
+  matcher: ["/admin/:path*", "/user/:path*"],
+}

@@ -3,8 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { useSelector } from "react-redux"
+import { logout } from "@/store/slices/authSlice"
 
+import { useDispatch, useSelector } from "react-redux"
+import { useRouter } from "next/navigation"
+import { UseDispatch } from "react-redux"
 export default function Navbar() {
   const token = useSelector((state: any) => state.auth.user)
   
@@ -13,7 +16,13 @@ export default function Navbar() {
   console.log(token)
   console.log("end")
   const pathname = usePathname()
+    const router = useRouter()
+    const dispatch=useDispatch();
+ const handleLogout = () => { 
+  dispatch(logout())
 
+  router.push("/login")
+}
   return (
     <header className="border-b shadow-sm">
       <div className="container flex items-center justify-between h-16">
@@ -32,9 +41,9 @@ export default function Navbar() {
           </Link>
           {isAuthenticated ? (
             <>
-              <Link href="/dashboard">Dashboard</Link>
-              <Button variant="ghost">
-                <Link href="/logout">Logout</Link>
+              <Link href="/admin">Dashboard</Link>
+              <Button variant="ghost"  onClick={handleLogout}>
+                Logout
               </Button>
             </>
           ) : (

@@ -15,7 +15,7 @@ import {
   VisibilityState,
 } from "@tanstack/react-table";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ArrowUpDown, ChevronDown, MoreHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -40,124 +40,208 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { useGetAllUsersQuery } from "../../../store/slices/apiSlice"
-
-import { UserType } from "../../../store/slices/apiSlice";
-
-// TABLE COLUMNS
-export const columns: ColumnDef<UserType>[] = [
-  {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-
-  {
-    accessorKey: "name",
-    header: "Name",
-    cell: ({ row }) => <div>{row.getValue("name") ?? "—"}</div>,
-  },
-
-  {
-    accessorKey: "email",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() =>
-          column.toggleSorting(column.getIsSorted() === "asc")
-        }
-      >
-        Email <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-    cell: ({ row }) => (
-      <div className="lowercase">{row.getValue("email")}</div>
-    ),
-  },
-
-  {
-    accessorKey: "age",
-    header: "Age",
-    cell: ({ row }) => <div>{row.getValue("age") ?? "—"}</div>,
-  },
-
-  {
-    accessorKey: "role",
-    header: "Role",
-    cell: ({ row }) => <div>{row.getValue("role") ?? "—"}</div>,
-  },
-
-  {
-    accessorKey: "createdAt",
-    header: "Created",
-    cell: ({ row }) => {
-      const date = row.getValue("createdAt") as string | undefined;
-      return <div>{date ? new Date(date).toLocaleDateString() : "—"}</div>;
-    },
-  },
-
-  {
-    id: "actions",
-    cell: ({ row }) => {
-      const user = row.original;
-
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-
-            <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(user._id)}
-            >
-              Copy User ID
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem> <Link href={`user/details/${user._id}`}>View Details</Link></DropdownMenuItem>
-            <DropdownMenuItem> <Link href={`user/edit/${user._id}`}>Edit User</Link></DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    },
-  },
-];
+import { useAppSelector } from "@/store/hooks";
+import { useRouter } from "next/navigation";
 
 export default function User() {
+  const router = useRouter();
+  const token = useAppSelector((state) => state.auth.token);
+
+  const [users, setUsers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // ---------------- DELETE USER ----------------
+  const handleDeleteUser = async (userId: string) => {
+    if (!token) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this user?"
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users/${userId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete user");
+      }
+
+      setUsers((prev) => prev.filter((u) => u._id !== userId));
+    } catch (error) {
+      console.error("Delete failed:", error);
+    }
+  };
+  // ------------------------------------------------
+
   useEffect(() => {
     document.title = "Users list";
   }, []);
 
-  const { data, isLoading } = useGetAllUsersQuery();
-  const users = data?.users ?? [];
+  useEffect(() => {
+    if (!token) {
+      router.replace("/login");
+    }
+  }, [token, router]);
 
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (!token) return;
+
+      setIsLoading(true);
+
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/users`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to fetch users");
+        }
+
+        const data = await response.json();
+        setUsers(data.users || []);
+      } catch (error) {
+        console.error(error);
+        setUsers([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [token]);
+
+  // ---------------- TABLE STATE ----------------
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] =
     React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
+  // ---------------------------------------------
+
+  // ---------------- TABLE COLUMNS ----------------
+  const columns: ColumnDef<any>[] = [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) =>
+            table.toggleAllPageRowsSelected(!!value)
+          }
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => row.getValue("name") ?? "—",
+    },
+    {
+      accessorKey: "email",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() =>
+            column.toggleSorting(column.getIsSorted() === "asc")
+          }
+        >
+          Email <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <div className="lowercase">{row.getValue("email")}</div>
+      ),
+    },
+    {
+      accessorKey: "age",
+      header: "Age",
+      cell: ({ row }) => row.getValue("age") ?? "—",
+    },
+    {
+      accessorKey: "role",
+      header: "Role",
+      cell: ({ row }) => row.getValue("role") ?? "—",
+    },
+    {
+      accessorKey: "createdAt",
+      header: "Created",
+      cell: ({ row }) => {
+        const date = row.getValue("createdAt") as string | undefined;
+        return date ? new Date(date).toLocaleDateString() : "—";
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const user = row.original;
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+
+              <DropdownMenuItem
+                onClick={() => navigator.clipboard.writeText(user._id)}
+              >
+                Copy User ID
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem asChild>
+                <Link href={`user/edit/${user._id}`}>Edit User</Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => handleDeleteUser(user._id)}
+                className="text-red-600"
+              >
+                Delete User
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ];
+  // ------------------------------------------------
 
   const table = useReactTable({
     data: users,
@@ -178,12 +262,13 @@ export default function User() {
     },
   });
 
-  if (isLoading)
+  if (isLoading) {
     return (
       <div className="text-center py-10 text-lg font-semibold">
         Loading users...
       </div>
     );
+  }
 
   return (
     <div className="w-full">
@@ -193,7 +278,6 @@ export default function User() {
         </Button>
       </div>
 
-      {/* Search */}
       <div className="flex items-center py-4">
         <Input
           placeholder="Search email..."
@@ -228,7 +312,6 @@ export default function User() {
         </DropdownMenu>
       </div>
 
-      {/* Table */}
       <div className="rounded-md border overflow-hidden">
         <Table>
           <TableHeader>
@@ -251,10 +334,7 @@ export default function User() {
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
+                <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
@@ -267,7 +347,10 @@ export default function User() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-6">
+                <TableCell
+                  colSpan={columns.length}
+                  className="text-center py-6"
+                >
                   No users found.
                 </TableCell>
               </TableRow>
@@ -276,7 +359,6 @@ export default function User() {
         </Table>
       </div>
 
-      {/* Pagination */}
       <div className="flex items-center justify-end space-x-2 py-4">
         <Button
           variant="outline"

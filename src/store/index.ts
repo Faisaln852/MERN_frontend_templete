@@ -1,30 +1,36 @@
-import { configureStore, combineReducers } from '@reduxjs/toolkit';
-import { apiSlice } from './slices/apiSlice';
-import authReducer from './slices/authSlice';
-import { persistReducer, persistStore } from 'redux-persist';
-import storage from 'redux-persist/lib/storage';
+// store/index.ts
+import { configureStore, combineReducers } from '@reduxjs/toolkit'
+import authReducer from './slices/authSlice'
+import storage from 'redux-persist/lib/storage'
+import { persistReducer, persistStore } from 'redux-persist'
 
+// Combine reducers
+const rootReducer = combineReducers({
+  auth: authReducer,
+})
+
+// Persist config
 const persistConfig = {
   key: 'root',
   storage,
-};
+  whitelist: ['auth'], // persist only auth
+}
 
-const rootReducer = combineReducers({
-  [apiSlice.reducerPath]: apiSlice.reducer,
-  auth: authReducer,
-});
+// Persisted reducer
+const persistedReducer = persistReducer(persistConfig, rootReducer)
 
-const persistedReducer = persistReducer(persistConfig, rootReducer);
-
+// Store
 export const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
-      serializableCheck: false,
-    }).concat(apiSlice.middleware),
-});
+      serializableCheck: false, // required for redux-persist
+    }),
+})
 
-export const persistor = persistStore(store);
+// Persistor
+export const persistor = persistStore(store)
 
-export type RootState = ReturnType<typeof store.getState>;
-export type AppDispatch = typeof store.dispatch;
+// ✅ Required for typed hooks
+export type RootState = ReturnType<typeof store.getState>
+export type AppDispatch = typeof store.dispatch

@@ -10,8 +10,8 @@ export default function SiteLayout({
 }) {
   return (
     <div className="flex flex-col min-h-screen">
-      <Navbar isAuthenticated={isAuthenticated} />
-      <main className="flex-1 container py-6">{children}</main>
+      <Navbar/>
+      <main className="">{children}</main>
       <Footer />
     </div>
   )

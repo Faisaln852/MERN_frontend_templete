@@ -1,219 +1,205 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { Controller, useForm } from "react-hook-form"
-import { toast } from "sonner"
-import * as z from "zod"
-import { useCreateUserMutation } from "../../../../store/slices/apiSlice"
-import { Button } from "@/components/ui/button"
+import * as React from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupText,
-  InputGroupTextarea,
-} from "@/components/ui/input-group"
-import { description } from "../../layout/chart-area-interactive"
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { useAppSelector } from "@/store/hooks";
+import { useRouter } from "next/navigation";
 
-// const formSchema = z.object({
-//   title: z
-//     .string()
-//     .min(5, "Bug title must be at least 5 characters.")
-//     .max(32, "Bug title must be at most 32 characters."),
-//   description: z
-//     .string()
-//     .min(20, "Description must be at least 20 characters.")
-//     .max(100, "Description must be at most 100 characters."),
-//       email: z
-//     .string()
-//     .email("Invalid email address"),
-// })
+/* -------------------- Schema -------------------- */
+
 const formSchema = z.object({
-  name: z
-    .string()
-    .nullable(),
-    // .min(5, "Title must be at least 5 characters.")
-    // .max(32, "Title must be at most 32 characters."),
-  description: z
-    .string()
-    .min(5, "Description must be at least 5 characters.")
-    .max(100, "Description must be at most 100 characters."),
-  email: z
-    .string()
-    .email("Invalid email address"),
-phone_number: z
-  .string()
-  .regex(/^(\+?\d{1,3}[-.\s]?)?(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})$/, "Invalid phone number"),
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  phone_number: z.string().regex(
+    /^(\+?\d{1,3}[-.\s]?)?(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})$/,
+    "Invalid phone number"
+  ),
   age: z.coerce
-  .number()
-  .int("Age must be an integer")
-  .min(18, "Age must be at least 18")
-  .max(100, "Age must be at most 100"),
-})
+    .number()
+    .int("Age must be an integer")
+    .min(18, "Age must be at least 18")
+    .max(100, "Age must be at most 100"),
+  role: z.enum(["user", "admin"]),
+});
 
-export function createUser() {
-  const form = useForm<z.infer<typeof formSchema>>({
+type FormValues = z.infer<typeof formSchema>;
+
+/* -------------------- Component -------------------- */
+
+export default function CreateUser() {
+  const router = useRouter();
+  const token = useAppSelector((state) => state.auth.token);
+
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      description: "",
       email: "",
-      phone_number:"",
-      age:0,
+      phone_number: "",
+      age: 18,
+      role: "user",
     },
-  })
-const [createUser, { isLoading, error }] = useCreateUserMutation();
-const onSubmit = async (data: z.infer<typeof formSchema>) => {
-  try {
-    const response = await createUser(data).unwrap();
-    toast.success('User created successfully'); // or any other notification library
-    console.log(response);
-  } catch (err: any) {
-    toast.error(err.data.message || 'Something went wrong'); // or any other notification library
-    console.error(err);
-  }
-};
+  });
+
+  const {
+    formState: { isSubmitting },
+  } = form;
+
+  /* -------------------- Submit -------------------- */
+
+  const onSubmit = async (values: FormValues) => {
+    if (!token) {
+      toast.error("Unauthorized");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(values),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create user");
+      }
+
+      toast.success("User created successfully");
+      form.reset();
+      router.push("/users");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Something went wrong");
+    }
+  };
+
+  /* -------------------- UI -------------------- */
 
   return (
     <Card className="w-full sm:max-w-md mx-auto">
       <CardHeader>
         <CardTitle>Create new user</CardTitle>
-        {/* <CardDescription>
-          Help us improve by reporting bugs you encounter.
-        </CardDescription> */}
       </CardHeader>
+
       <CardContent>
-        <form id="form-rhf-demo" onSubmit={form.handleSubmit(onSubmit)}>
+        <form id="create-user-form" onSubmit={form.handleSubmit(onSubmit)}>
           <FieldGroup>
             <Controller
               name="name"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="user-name">
-                    Name
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id="user-name"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="John Deo"
-                    autoComplete="on"
-                  />
-                  {fieldState.invalid && (
+                  <FieldLabel>Name</FieldLabel>
+                  <Input {...field} placeholder="John Doe" />
+                  {fieldState.error && (
                     <FieldError errors={[fieldState.error]} />
                   )}
                 </Field>
               )}
             />
+
             <Controller
               name="email"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="user-email">
-                    email
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id="user-email"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="johndeo@gmail.com"
-                    autoComplete="on"
-                  />
-                  {fieldState.invalid && (
+                  <FieldLabel>Email</FieldLabel>
+                  <Input {...field} placeholder="john@example.com" />
+                  {fieldState.error && (
                     <FieldError errors={[fieldState.error]} />
                   )}
                 </Field>
               )}
             />
+
             <Controller
               name="phone_number"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="user-phone-number">
-                    Phone number
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id="user-phone-number"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="+4165550123"
-                    autoComplete="on"
-                  />
-                  {fieldState.invalid && (
+                  <FieldLabel>Phone number</FieldLabel>
+                  <Input {...field} placeholder="+14165550123" />
+                  {fieldState.error && (
                     <FieldError errors={[fieldState.error]} />
                   )}
                 </Field>
               )}
             />
+
             <Controller
               name="age"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="user-age">
-                    Age
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id="user-age"
-                    type="number"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="18"
-                    autoComplete="on"
-                  />
-                  {fieldState.invalid && (
+                  <FieldLabel>Age</FieldLabel>
+                  <Input {...field} type="number" />
+                  {fieldState.error && (
                     <FieldError errors={[fieldState.error]} />
                   )}
                 </Field>
               )}
             />
+
             <Controller
-              name="description"
+              name="role"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-rhf-demo-description">
-                    Description
-                  </FieldLabel>
-                  <InputGroup>
-                    <InputGroupTextarea
-                      {...field}
-                      id="form-rhf-demo-description"
-                      placeholder="I'm having an issue with the login button on mobile."
-                      rows={6}
-                      className="min-h-24 resize-none"
-                      aria-invalid={fieldState.invalid}
-                    />
-                    <InputGroupAddon align="block-end">
-                      <InputGroupText className="tabular-nums">
-                        {field.value.length}/100 characters
-                      </InputGroupText>
-                    </InputGroupAddon>
-                  </InputGroup>
-                  <FieldDescription>
-                    Include steps to reproduce, expected behavior, and what
-                    actually happened.
-                  </FieldDescription>
-                  {fieldState.invalid && (
+                  <FieldLabel>Role</FieldLabel>
+
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    onOpenChange={() => field.onBlur()}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel>Role</SelectLabel>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+
+                  {fieldState.error && (
                     <FieldError errors={[fieldState.error]} />
                   )}
                 </Field>
@@ -222,17 +208,24 @@ const onSubmit = async (data: z.infer<typeof formSchema>) => {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter>
-        <Field orientation="horizontal">
-          <Button type="button" variant="outline" onClick={() => form.reset()}>
-            Reset
-          </Button>
-          <Button type="submit" form="form-rhf-demo">
-            Submit
-          </Button>
-        </Field>
+
+      <CardFooter className="flex gap-2">
+        <Button
+          variant="outline"
+          onClick={() => form.reset()}
+          disabled={isSubmitting}
+        >
+          Reset
+        </Button>
+
+        <Button
+          type="submit"
+          form="create-user-form"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Creating..." : "Submit"}
+        </Button>
       </CardFooter>
     </Card>
-  )
+  );
 }
-export default createUser;

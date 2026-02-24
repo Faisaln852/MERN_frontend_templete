@@ -1,92 +1,162 @@
 "use client";
 
-import * as React from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, Controller } from "react-hook-form";
 import * as z from "zod";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-
-import { 
-  useGetUserDetailsQuery,
-  useUpdateUserDetailsMutation 
-} from "@/store/slices/apiSlice";
-
+import { useAppSelector } from "@/store/hooks";
 import { Button } from "@/components/ui/button";
 import {
-  Card, CardContent, CardFooter, CardHeader, CardTitle
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import {
-  Field, FieldError, FieldGroup, FieldLabel
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupText,
-  InputGroupTextarea
-} from "@/components/ui/input-group";
+
+/* -------------------- Schema -------------------- */
 
 const formSchema = z.object({
-  name: z.string().nullable(),
-  description: z.string().min(5).max(100),
-  email: z.string().email(),
-  phone_number: z
-    .string()
-    .regex(/^(\+?\d{1,3}[-.\s]?)?(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})$/, 
-      "Invalid phone number"),
-  age: z.coerce.number().min(18).max(100)
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email"),
+  phone_number: z.string().regex(
+    /^(\+?\d{1,3}[-.\s]?)?(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})$/,
+    "Invalid phone number"
+  ),
+  role: z.enum(["user", "admin"]),
+  age: z.coerce.number().min(18, "Must be at least 18").max(100),
 });
 
+type FormValues = z.infer<typeof formSchema>;
+
+/* -------------------- Component -------------------- */
+
 export default function EditUserPage() {
+  useEffect(() => {
+    document.title = "User Edit";
+  }, []);
 
-  // 1. GET ID FROM URL
-  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const params = useParams();
+  const id = params.id as string;
 
-  // 2. FETCH USER DETAILS
-  const { data, isLoading, error } = useGetUserDetailsQuery(id);
+  const token = useAppSelector((state) => state.auth.token);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 3. FORM SETUP
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      description: "",
       email: "",
       phone_number: "",
-      age: 18
-    }
+      age: 18,
+      role: "user",
+    },
   });
 
-  // 4. UPDATE MUTATION
-  const [updateUser, { isLoading: isUpdating }] =
-    useUpdateUserDetailsMutation();
+  const {
+    formState: { isSubmitting },
+  } = form;
 
-  // 5. POPULATE FORM WHEN DATA ARRIVES
-  React.useEffect(() => {
-    if (data) {
-      form.reset({
-        name: data.name || "",
-        description: data.description || "",
-        email: data.email || "",
-        phone_number: data.phone_number || "",
-        age: data.age || 18
-      });
+  /* -------------------- Fetch User -------------------- */
+
+  useEffect(() => {
+    if (!token || !id) return;
+
+    const fetchUser = async () => {
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/users/${id}`,
+          {
+            method:"GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to load user");
+        }
+
+        const data = await response.json();
+
+        form.reset({
+          name: data.name,
+          email: data.email,
+          phone_number: data.phone_number,
+          age: data.age,
+          role: data.role,
+        });
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to load user");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [token, id, form]);
+
+  /* -------------------- Submit -------------------- */
+
+  const onSubmit = async (values: FormValues) => {
+    if (!token) {
+      toast.error("Unauthorized");
+      return;
     }
-  }, [data, form]);
 
-  // 6. SUBMIT UPDATE
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      await updateUser({ id, data: values }).unwrap();
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users/${id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(values),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to update user");
+      }
+
       toast.success("User updated successfully");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Something went wrong");
+      router.push("/admin/user");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Something went wrong");
     }
   };
 
-  if (isLoading) return <p>Loading user...</p>;
-  if (error) return <p>Error loading user data</p>;
+  /* -------------------- Loading -------------------- */
+
+  if (isLoading) {
+    return <p className="text-center mt-10">Loading user...</p>;
+  }
+
+  /* -------------------- UI -------------------- */
 
   return (
     <Card className="w-full sm:max-w-md mx-auto">
@@ -103,8 +173,10 @@ export default function EditUserPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel>Name</FieldLabel>
-                  <Input {...field} placeholder="John Doe" />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  <Input {...field} />
+                  {fieldState.error && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                 </Field>
               )}
             />
@@ -115,8 +187,10 @@ export default function EditUserPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel>Email</FieldLabel>
-                  <Input {...field} placeholder="email@example.com" />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  <Input {...field} />
+                  {fieldState.error && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                 </Field>
               )}
             />
@@ -127,8 +201,10 @@ export default function EditUserPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel>Phone Number</FieldLabel>
-                  <Input {...field} placeholder="+1234567890" />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  <Input {...field} />
+                  {fieldState.error && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                 </Field>
               )}
             />
@@ -139,33 +215,42 @@ export default function EditUserPage() {
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel>Age</FieldLabel>
-                  <Input {...field} type="number" placeholder="18" />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  <Input {...field} type="number" />
+                  {fieldState.error && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                 </Field>
               )}
             />
 
             <Controller
-              name="description"
+              name="role"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel>Description</FieldLabel>
+                  <FieldLabel>Role</FieldLabel>
 
-                  <InputGroup>
-                    <InputGroupTextarea
-                      {...field}
-                      rows={4}
-                      placeholder="Write user details..."
-                    />
-                    <InputGroupAddon align="block-end">
-                      <InputGroupText>
-                        {field.value.length}/100
-                      </InputGroupText>
-                    </InputGroupAddon>
-                  </InputGroup>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    onOpenChange={() => field.onBlur()}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
 
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel>Role</SelectLabel>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+
+                  {fieldState.error && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                 </Field>
               )}
             />
@@ -173,22 +258,18 @@ export default function EditUserPage() {
         </form>
       </CardContent>
 
-      <CardFooter>
-        <Field orientation="horizontal">
-          <Button 
-            type="button" 
-            variant="outline" 
-            onClick={() => form.reset()}>
-            Reset
-          </Button>
+      <CardFooter className="flex gap-2">
+        <Button variant="outline" onClick={() => form.reset()}>
+          Reset
+        </Button>
 
-          <Button 
-            type="submit" 
-            form="edit-user-form"
-            disabled={isUpdating}>
-            {isUpdating ? "Updating..." : "Update User"}
-          </Button>
-        </Field>
+        <Button
+          type="submit"
+          form="edit-user-form"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Updating..." : "Update User"}
+        </Button>
       </CardFooter>
     </Card>
   );
